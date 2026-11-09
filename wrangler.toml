@@ -1,0 +1,37 @@
+# 面试题库 Web · Worker 配置
+# 单 Worker 同时托管前端静态资源与 API —— 同源，cookie 可用，零 CORS
+
+name = "interview"
+main = "./api/src/index.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 前端构建产物（vite build → web/dist）
+[assets]
+directory = "./web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# 只有 /api/* 先过 Worker，其余走静态资源（含 SPA fallback）
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "interview"
+database_id = "65e4e5fa-fe25-4c1e-9a49-557c99aa6d87"
+
+[ai]
+binding = "AI"
+
+[vars]
+# 生产：Worker 自己的域名（OAuth 回调、登录跳转都基于它）
+# 本地覆盖放在 .dev.vars（已 gitignore），不要把本地地址写进这里
+APP_ORIGIN = "https://interview.2256896349.workers.dev"
+AUTH_EMAIL_ENABLED = "false"
+# GitHub OAuth App 的 Client ID（公开信息；Secret 用 wrangler secret put）
+GITHUB_CLIENT_ID = "Ov23liZ49BhlNAdgxgll"
+
+# 二期再打开
+# [triggers]
+# crons = ["0 3 * * *"]
+
+# 本地开发：wrangler dev 会启动 miniflare，D1 走 --local

@@ -1,0 +1,36 @@
+/* lib/markdown.ts 生成的富文本 class（v-html 注入，需为全局样式）。
+   数值与小程序 detail.js 的 RICH_* 内联常量一一对应，颜色取 tokens.css。 */
+
+.md-p {
+  margin: 0 0 calc(var(--rpx) * 20);
+  color: var(--color-text-2);
+  font-size: var(--text-md);
+  line-height: 1.8;
+}
+
+.md-li {
+  margin: 0 0 calc(var(--rpx) * 8);
+  color: var(--color-text-2);
+  font-size: var(--text-md);
+  line-height: 1.8;
+}
+
+.md-list {
+  margin: 0 0 calc(var(--rpx) * 20);
+  padding-left: calc(var(--rpx) * 40);
+}
+
+.md-code {
+  padding: 0 calc(var(--rpx) * 8);
+  background-color: var(--color-surface-muted);
+  border-radius: calc(var(--rpx) * 6);
+  color: var(--color-primary-pressed);
+  font-family: var(--font-mono);
+  font-size: calc(var(--rpx) * 24);
+}
+
+.md-h {
+  color: var(--color-text-1);
+  font-size: calc(var(--rpx) * 30);
+  line-height: 1.6;
+}

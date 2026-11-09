@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
+.DS_Store
+import/seed.sql
+.review-state.json
+import/report.txt
+backups/

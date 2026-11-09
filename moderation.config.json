@@ -1,0 +1,66 @@
+{
+  "$comment": "内容门禁配置 —— 结构与 review-gate 的 review.config.json 同构，便于逻辑平移",
+  "risk": {
+    "tiers": {
+      "high": {
+        "approvals_required": 2,
+        "match": ["has:contact", "has:image"]
+      },
+      "medium": {
+        "approvals_required": 1,
+        "match": ["has:code", "len:long"]
+      },
+      "low": {
+        "approvals_required": 1,
+        "match": ["*"]
+      }
+    },
+    "default_tier": "low",
+    "always_human": {
+      "approvals_required": 2,
+      "paths": ["always:image", "always:sensitive"]
+    },
+    "content_escalators": [
+      {
+        "id": "phone",
+        "pattern": "1[3-9]\\d{9}",
+        "effect": "high",
+        "why": "疑似手机号"
+      },
+      {
+        "id": "email",
+        "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
+        "effect": "high",
+        "why": "疑似邮箱"
+      },
+      {
+        "id": "script",
+        "pattern": "<\\s*script[^>]*>[\\s\\S]*?</\\s*script\\s*>",
+        "effect": "raise",
+        "why": "含完整脚本标签"
+      },
+      {
+        "id": "wechat",
+        "pattern": "(微信|weixin|vx)\\s*[:：]?\\s*[a-zA-Z0-9_-]{5,}",
+        "effect": "high",
+        "why": "疑似微信号"
+      },
+      {
+        "id": "extlink",
+        "pattern": "https?://",
+        "effect": "raise",
+        "why": "含外链"
+      }
+    ]
+  },
+  "rounds": {
+    "max_rounds": 3,
+    "on_cap": "reject-and-cooldown",
+    "cooldown_hours": 24
+  },
+  "limits": {
+    "title_max": 200,
+    "body_max": 20000,
+    "comment_max": 500
+  }
+}

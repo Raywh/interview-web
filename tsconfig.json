@@ -1,0 +1,6 @@
+{
+  // 根配置只负责让 `vue-tsc --noEmit`（package.json 的 build 脚本）真正检查到前端代码。
+  // 具体编译选项在 web/tsconfig.json，这里用 web 作为唯一 source of truth。
+  "extends": "./web/tsconfig.json",
+  "include": ["web/src/**/*.ts", "web/src/**/*.d.ts", "web/src/**/*.vue"]
+}
