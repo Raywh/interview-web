@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { DAILY_CATEGORIES, generateQuestion } from './ai/generate';
 import type { Env } from './types';
 
 /**
@@ -41,12 +42,16 @@ import { adminRoute } from './routes/admin';
 import { statsRoute } from './routes/stats';
 import { logsRoute } from './routes/logs';
 
+// D：访问统计（PV）
+import { pvRoute } from './routes/pv';
+
 app.route('/api/questions', questionsRoute);
 // comments 的对外路径是 /api/questions/:id/comments，所以也挂在 questions 下
 app.route('/api/questions', commentsRoute);
 app.route('/api/admin', adminRoute);
 app.route('/api/stats', statsRoute);
 app.route('/api/logs', logsRoute);
+app.route('/api/pv', pvRoute);
 
 /**
  * 未匹配的请求：
@@ -71,4 +76,24 @@ app.onError((err, c) => {
   );
 });
 
-export default app;
+/**
+ * Worker 导出：
+ *  - fetch      → Hono 应用
+ *  - scheduled  → 每日 03:00 UTC 自动出题（每个分类 1 道）
+ */
+export default {
+  fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
+    return app.fetch(request, env, ctx);
+  },
+
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      (async () => {
+        for (const category of DAILY_CATEGORIES) {
+          const created = await generateQuestion(env, category);
+          console.log(`[cron] ${category} → ${created ? created.title : '跳过'}`);
+        }
+      })(),
+    );
+  },
+} satisfies ExportedHandler<Env>;

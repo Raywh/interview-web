@@ -46,6 +46,7 @@ docs/
   api.md              接口契约（权威）
   components.md       组件契约
 scripts/import.mjs    题库导入
+scripts/backup.ps1    D1 自动备份（保留 14 份，用法见 scripts/backup.md）
 import/seed.sql       导入产物（gitignore）
 backups/              D1 导出（gitignore）
 ```
@@ -123,17 +124,29 @@ npx wrangler rollback <version-id>
 
 ## 备份与恢复
 
-D1 数据只存在 Cloudflare，**必须定期导出**：
+D1 数据只存在 Cloudflare，**必须定期导出**。自动化入口是 [`scripts/backup.ps1`](scripts/backup.ps1)，
+用法与恢复步骤见 [`scripts/backup.md`](scripts/backup.md)。
 
-```bash
-# 导出（生成 backups/interview-<时间戳>.sql，已 gitignore）
-npx wrangler d1 export interview --remote --output=backups/interview-20261106.sql
-
-# 恢复（谨慎：会在目标库执行 DROP/CREATE）
-npx wrangler d1 execute interview --remote --file=backups/interview-20261106.sql
+```powershell
+pwsh -File scripts/backup.ps1     # 前置：已 npx wrangler login（同一 Windows 用户）
 ```
 
-建议：每次 schema 变更前、每次批量导入前各导一次。
+- 产物：`backups/interview-yyyyMMdd-HHmmss.sql`。`backups/` 已 gitignore，**含用户邮箱等个人信息，不要提交**
+- 保留策略：只留最近 **14** 份自动备份，更早的按文件名时间戳删除；手工导出的老文件（如 `interview-20261106-2251.sql`）不参与计数、不会被删
+- 日志：`backups/backup.log` 每次运行一行（时间 / 文件名 / 大小 / 耗时 / 成败）；失败退出码非 0，错误摘要写进日志
+- 想每天自动跑：`scripts/backup.md` 里有 `schtasks /create` 完整命令（每天 12:30，**未实际注册**）
+
+手动导出 / 恢复（恢复是破坏性操作，执行前先读 `scripts/backup.md`）：
+
+```bash
+# 临时手动导出一份（正常情况用上面的脚本）
+npx wrangler d1 export interview --remote --output=backups/interview-manual.sql
+
+# 恢复：会用备份文件内容改写线上库，先确认文件、再先备份当前状态
+npx wrangler d1 execute interview --remote --file=backups/interview-<时间戳>.sql
+```
+
+建议：每次 schema 变更前、每次批量导入前各跑一次备份。
 
 ---
 

@@ -169,10 +169,12 @@
 ### `GET /api/admin/stats`
 
 ```jsonc
-{ "ok": true, "data": { "queue": { "questions": 3, "comments": 7 }, "today": { "published": 12, "rejected": 2 }, "ai": { "neurons": 0 } } }
+{ "ok": true, "data": { "queue": { "questions": 3, "comments": 7 }, "today": { "published": 12, "rejected": 2 }, "ai": { "neurons": 0 }, "pv": { "today": 128, "last7": 902, "topPaths": [{ "path": "/q/q_01H...", "count": 41 }] } } }
 ```
 
 `ai` 二期接入，现在恒为 0。
+
+`pv` 见 §14：`today` / `last7` 按 UTC 日切分；`topPaths` 取最近 7 天合计前 5。
 
 ---
 
@@ -482,3 +484,94 @@ data: {"done":true,"used":1,"limit":20}
 - 只匹配**完整闭合**的 `<script>…</script>`
 - 效果从 `high` 降为 `raise`（升一级）
 - `<script setup>` 这类裸标签不再命中
+---
+
+## 13. AI 出题（2026-11-09）
+
+### 每日自动生成（Cron）
+
+```
+[triggers]
+crons = ["0 3 * * *"]     # 每天 03:00 UTC = 北京时间 11:00
+```
+
+每个分类（Vue / React / 工程化 / CSS / JS）生成 1 道，共 5 道/天：
+
+- 模型 `@cf/deepseek-ai/deepseek-r1-distill-qwen-32b`（质量优先，5 条约 1.8k neurons）
+- 传入该分类最近 30 个标题作「禁止重复」清单
+- 解析失败 / 标题重复 → 跳过该条，不报错
+- 生成结果同样过门禁；`high` 也发布，但写 `logs`（tag `ai.generate_high_risk`）
+
+### `POST /api/admin/generate`（需 admin）
+
+手动补一道，和 Cron 共用同一套逻辑：
+
+```jsonc
+// 请求
+{ "category": "Vue" }
+// 响应
+{ "ok": true, "data": { "id": "q_...", "title": "…", "category": "Vue", "tier": "low", "status": "published" } }
+```
+
+- `category` 必须在 `Vue / React / 工程化 / CSS / JS` 内
+- 生成失败（模型超时 / 解析失败 / 标题重复）→ 500 `INTERNAL`，可重试
+
+---
+
+## 14. 访问统计（PV，2026-11-09）
+
+轻量 PV：前端每次路由切换上报一次，服务端按「UTC 日期 + 归一化路径」聚合，管理端看今日 / 近 7 天 / 热门路径。
+
+### `POST /api/pv`（无需登录）
+
+```jsonc
+// 请求
+{ "path": "/q/q_01H...?from=home#comments" }
+// 响应
+{ "ok": true, "data": { "counted": true } }
+```
+
+**path 归一化**（服务端 `api/src/routes/pv.ts`）：
+
+| 规则 | 结果 |
+|---|---|
+| 去掉 query 和 hash | `/q/x?a=1#b` → `/q/x` |
+| 超过 120 字符 | 截断到 120 字符 |
+| 精确允许 | `/`、`/admin`、`/add`、`/me`、`/login` |
+| 前缀允许 | `/q/…`（保留题目 id，便于看哪道题最热）；`/admin/…`、`/add/…`、`/me/…`、`/login/…` |
+| 其余（含站外 URL、非字符串） | 统一记成 `/other` |
+
+**入库**：`INSERT INTO pageviews (day, path, count) VALUES (?, ?, 1) ON CONFLICT(day, path) DO UPDATE SET count = count + 1`。
+表结构见 `api/src/db/migrations/004_pageviews.sql`（新库由 `schema.sql` 直接建出）。
+
+**限流**：同一 IP 每分钟最多 30 次。IP 只存 sha256（不落明文），键为 `pv:ip:<ipHash>:<yyyyMMddHHmm>`，复用 `rate_limits` 表。
+超限**不写库**，仍返回 HTTP 200 + `{ "counted": false }`——beacon 请求不值得为限流制造浏览器错误。
+注意：`rate_limits` 过期行目前没人清（Cron 清理是二期），这是已知遗留。
+
+**日切分**：`day` 是 UTC 日期 `YYYY-MM-DD`，UTC 00:00 换日；北京时间用户看到的「今日」会比本地晚 8 小时换日。
+原因同 §8.5：Workers 运行时没有本地时区配置。
+
+### `GET /api/admin/stats` 的 `pv` 字段（需 admin）
+
+```jsonc
+{
+  "pv": {
+    "today": 128,
+    "last7": 902,
+    "topPaths": [
+      { "path": "/q/q_01H...", "count": 41 },
+      { "path": "/", "count": 30 }
+    ]
+  }
+}
+```
+
+- `today`：UTC 今天 `SUM(count)`
+- `last7`：UTC 今天 + 前 6 个 UTC 日（共 7 个自然日）的 `SUM(count)`
+- `topPaths`：同一 7 天窗口内按路径 `SUM(count)` 倒序前 5，**并列时按 path 字典序**，保证结果稳定
+
+### 前端上报
+
+`web/src/router.ts` 的 `router.afterEach` 调用 `reportPageview(to.fullPath)`：
+优先 `navigator.sendBeacon`（页面关闭/跳转也能发出），队列失败时退回 `fetch(..., { keepalive: true })`。
+任何失败都静默，不影响导航。管理端展示在「审核统计」下方（今日 PV / 7 日 PV / Top 5 路径）。

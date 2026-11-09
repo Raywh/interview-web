@@ -89,3 +89,12 @@ CREATE TABLE IF NOT EXISTS ai_usage (
   neurons INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, user_id)
 );
+
+-- ── 访问统计（PV，按天聚合）──────────────────────────
+-- day 用 UTC 日期；path 为归一化后的路径（见 api/src/routes/pv.ts）
+CREATE TABLE IF NOT EXISTS pageviews (
+  day   TEXT NOT NULL,     -- YYYY-MM-DD（UTC）
+  path  TEXT NOT NULL,     -- 归一化后的路径，如 /  /q/xxx  /admin
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, path)
+);

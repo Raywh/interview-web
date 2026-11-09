@@ -14,7 +14,7 @@ import UiCard from '../components/UiCard.vue';
 import UiChip from '../components/UiChip.vue';
 import UiEmpty from '../components/UiEmpty.vue';
 import { ApiError } from '../api/client';
-import { getAdminQueue, getAdminStats, review } from '../api/endpoints';
+import { generateQuestion, getAdminQueue, getAdminStats, review } from '../api/endpoints';
 import type { AdminStats, QueueItem } from '../api/endpoints';
 import type { Tier } from '../api/types';
 import { formatDateTime } from '../lib/format';
@@ -45,6 +45,26 @@ const actionError = ref('');
 const feedback = ref('');
 
 const submittingId = ref('');
+/** AI 出题：分类选择 + 运行状态 */
+const GEN_CATEGORIES = ['Vue', 'React', '工程化', 'CSS', 'JS'] as const;
+const genCategory = ref<string>('Vue');
+const generating = ref(false);
+
+async function runGenerate(): Promise<void> {
+  if (generating.value) return;
+  generating.value = true;
+  actionError.value = '';
+  feedback.value = '';
+  try {
+    const created = await generateQuestion(genCategory.value);
+    feedback.value = `已生成并发布：${created.title}`;
+    await load();
+  } catch (err) {
+    actionError.value = err instanceof Error ? err.message : '生成失败，请稍后再试';
+  } finally {
+    generating.value = false;
+  }
+}
 /** 批量通过：选中的条目 key（`kind:id`） */
 const selected = ref<Set<string>>(new Set());
 const batchRunning = ref(false);
@@ -60,6 +80,10 @@ const groups = computed(() =>
     items: items.value.filter((item) => item.riskTier === tier),
   })).filter((group) => group.items.length > 0),
 );
+
+/** 访问统计（docs/api.md §14）：老服务端没有 pv 字段时按空处理，不让页面崩 */
+const pv = computed(() => stats.value?.pv ?? null);
+const pvTopPaths = computed(() => pv.value?.topPaths ?? []);
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -273,6 +297,42 @@ onMounted(() => {
           <span class="admin-stat__num">{{ stats ? (stats.flagged ?? 0) : '—' }}</span>
           <span class="admin-stat__label">AI 需留意</span>
         </div>
+      </div>
+
+      <!-- 访问统计：GET /api/admin/stats 的 pv 字段，UTC 日切分 -->
+      <section class="pv" aria-label="访问统计">
+        <div class="pv__head">
+          <h2 class="pv__title">访问</h2>
+          <span class="pv__hint">UTC 日切分 · 近 7 天</span>
+        </div>
+        <div class="pv__nums">
+          <div class="pv__num">
+            <span class="pv__value">{{ pv ? pv.today : '—' }}</span>
+            <span class="pv__label">今日 PV</span>
+          </div>
+          <div class="pv__num">
+            <span class="pv__value">{{ pv ? pv.last7 : '—' }}</span>
+            <span class="pv__label">7 日 PV</span>
+          </div>
+        </div>
+        <ol v-if="pvTopPaths.length" class="pv__top">
+          <li v-for="entry in pvTopPaths" :key="entry.path" class="pv__top-item">
+            <code class="pv__path">{{ entry.path }}</code>
+            <span class="pv__count">{{ entry.count }}</span>
+          </li>
+        </ol>
+        <p v-else class="pv__empty">近 7 天暂无访问记录</p>
+      </section>
+
+      <div class="ai-gen">
+        <span class="ai-gen__label">AI 出题</span>
+        <select v-model="genCategory" class="ai-gen__select" :disabled="generating">
+          <option v-for="c in GEN_CATEGORIES" :key="c" :value="c">{{ c }}</option>
+        </select>
+        <UiButton size="md" :disabled="generating" @click="runGenerate">
+          {{ generating ? '生成中…' : '生成一道' }}
+        </UiButton>
+        <span class="ai-gen__hint">每天 03:00 UTC 也会自动生成 5 道</span>
       </div>
 
       <div v-if="items.length" class="batch-bar">
@@ -508,6 +568,92 @@ onMounted(() => {
 
 .admin-stat__label {
   margin-top: calc(var(--rpx) * 4);
+  color: var(--color-text-3);
+  font-size: var(--text-xs);
+}
+
+/* ---- 访问统计（§14） ---- */
+.pv {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pv__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.pv__title {
+  color: var(--color-text-1);
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.pv__hint {
+  color: var(--color-text-3);
+  font-size: var(--text-xs);
+}
+
+.pv__nums {
+  display: flex;
+  gap: var(--space-6);
+}
+
+.pv__num {
+  display: flex;
+  flex-direction: column;
+}
+
+.pv__value {
+  color: var(--color-text-1);
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv__label {
+  margin-top: calc(var(--rpx) * 4);
+  color: var(--color-text-3);
+  font-size: var(--text-xs);
+}
+
+.pv__top {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.pv__top-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: calc(var(--rpx) * 4) 0;
+  font-size: var(--text-sm);
+}
+
+.pv__path {
+  color: var(--color-text-2);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.pv__count {
+  color: var(--color-text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv__empty {
+  margin-top: var(--space-2);
   color: var(--color-text-3);
   font-size: var(--text-xs);
 }
@@ -800,5 +946,37 @@ onMounted(() => {
 
 .admin-stat--warn .admin-stat__label {
   color: var(--color-danger);
+}
+
+/* ---- AI 出题 ---- */
+.ai-gen {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.ai-gen__label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-2);
+}
+
+.ai-gen__select {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-1);
+  font-size: var(--text-sm);
+}
+
+.ai-gen__hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-3);
 }
 </style>

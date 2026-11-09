@@ -7,6 +7,7 @@
  *  GET  /stats   队列长度、今日通过 / 拒绝数、ai.neurons 恒 0
  */
 import { Hono } from 'hono';
+import { DAILY_CATEGORIES, generateQuestion } from '../ai/generate';
 import type { Context } from 'hono';
 import { requireAdmin } from '../auth/middleware';
 import type { AppEnv } from '../lib/env';
@@ -250,7 +251,14 @@ adminRoute.get('/stats', requireAdmin, async (c) => {
   const now = Date.now();
   const dayStart = now - (now % (24 * 60 * 60 * 1000));
 
-  const [pendingQuestions, pendingComments, publishedQuestions, publishedComments, rejectedQuestions, rejectedComments, flagged] =
+  // PV 按 UTC 日期聚合：today 是 UTC 今天；last7 = 今天 + 前 6 个 UTC 日（7 个自然日）
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const todayKey = new Date(now).toISOString().slice(0, 10);
+  const last7StartKey = new Date(now - 6 * DAY_MS).toISOString().slice(0, 10);
+
+  // 解构顺序必须与下面 Promise.all 的数组顺序逐项对应：
+  //   pendingQ, pendingC, flagged(AI high), publishedQ, publishedC, rejectedQ, rejectedC, pvToday, pvLast7, pvTopPaths
+  const [pendingQuestions, pendingComments, flagged, publishedQuestions, publishedComments, rejectedQuestions, rejectedComments, pvToday, pvLast7, pvTopPaths] =
     await Promise.all([
       db.prepare("SELECT COUNT(*) AS c FROM questions WHERE status = 'pending'").first<{ c: number }>(),
       db.prepare("SELECT COUNT(*) AS c FROM comments WHERE status = 'pending'").first<{ c: number }>(),
@@ -270,6 +278,23 @@ adminRoute.get('/stats', requireAdmin, async (c) => {
       db.prepare("SELECT COUNT(*) AS c FROM comments WHERE status = 'rejected' AND created_at >= ?")
         .bind(dayStart)
         .first<{ c: number }>(),
+      // 访问统计（docs/api.md §14）：今日 PV / 近 7 天 PV / 近 7 天 Top 5 路径
+      db.prepare('SELECT COALESCE(SUM(count), 0) AS total FROM pageviews WHERE day = ?')
+        .bind(todayKey)
+        .first<{ total: number }>(),
+      db.prepare('SELECT COALESCE(SUM(count), 0) AS total FROM pageviews WHERE day BETWEEN ? AND ?')
+        .bind(last7StartKey, todayKey)
+        .first<{ total: number }>(),
+      db.prepare(
+        `SELECT path, SUM(count) AS total
+           FROM pageviews
+          WHERE day BETWEEN ? AND ?
+          GROUP BY path
+          ORDER BY total DESC, path ASC
+          LIMIT 5`,
+      )
+        .bind(last7StartKey, todayKey)
+        .all<{ path: string; total: number }>(),
     ]);
 
   return ok({
@@ -285,6 +310,14 @@ adminRoute.get('/stats', requireAdmin, async (c) => {
     ai: { neurons: 0 },
     // 门禁判为 high 的 AI 回答数：不进审核队列，靠这个数字提醒管理员
     flagged: Number(flagged?.c ?? 0),
+    pv: {
+      today: Number(pvToday?.total ?? 0),
+      last7: Number(pvLast7?.total ?? 0),
+      topPaths: (pvTopPaths.results ?? []).map((row) => ({
+        path: row.path,
+        count: Number(row.total),
+      })),
+    },
   });
 });
 
@@ -326,4 +359,30 @@ adminRoute.post('/visibility', requireAdmin, async (c) => {
   }
 
   return ok({ id, type, status: next });
+});
+/**
+ * 手动触发 AI 出题 —— POST /api/admin/generate
+ *
+ * 与每日 Cron 共用 generateQuestion()；给管理员一个「现在就来一道」的入口，
+ * 也方便在 Cron 出错时手动补。
+ */
+adminRoute.post('/generate', requireAdmin, async (c) => {
+  const denied = guardAdmin(c);
+  if (denied) return denied;
+
+  const body: unknown = await c.req.json().catch(() => undefined);
+  const category =
+    body && typeof body === 'object' && 'category' in body
+      ? String((body as { category?: unknown }).category ?? '').trim()
+      : '';
+
+  if (!DAILY_CATEGORIES.includes(category as (typeof DAILY_CATEGORIES)[number])) {
+    return fail('VALIDATION', `category 必须是 ${DAILY_CATEGORIES.join(' / ')} 之一`, ['category']);
+  }
+
+  const created = await generateQuestion(c.env, category);
+  if (!created) {
+    return fail('INTERNAL', '本次没生成出来（模型超时、解析失败或标题重复），请稍后再试');
+  }
+  return ok(created);
 });

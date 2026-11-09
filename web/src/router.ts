@@ -90,6 +90,41 @@ router.beforeEach(async (to) => {
   return true;
 });
 
+/**
+ * 访问统计上报（docs/api.md §14）。
+ * 单页应用只在路由切换时算一次 PV；失败必须静默，不能影响导航。
+ * 优先 sendBeacon（页面关闭/跳转时也能发出去），不支持或排队失败则退回 fetch keepalive。
+ */
+function reportPageview(path: string): void {
+  const payload = JSON.stringify({ path });
+
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      const queued = navigator.sendBeacon(
+        '/api/pv',
+        new Blob([payload], { type: 'application/json' }),
+      );
+      if (queued) return;
+    }
+  } catch {
+    // sendBeacon 不可用 → 走下面的 fetch 兜底
+  }
+
+  try {
+    void fetch('/api/pv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {
+      // 统计失败静默
+    });
+  } catch {
+    // 统计失败静默
+  }
+}
+
 router.afterEach((to) => {
   document.title = to.meta.title ? `${to.meta.title} · ${SITE_TITLE}` : SITE_TITLE;
+  reportPageview(to.fullPath);
 });

@@ -30,8 +30,8 @@ AUTH_EMAIL_ENABLED = "false"
 # GitHub OAuth App 的 Client ID（公开信息；Secret 用 wrangler secret put）
 GITHUB_CLIENT_ID = "Ov23liZ49BhlNAdgxgll"
 
-# 二期再打开
-# [triggers]
-# crons = ["0 3 * * *"]
+# 每日 03:00 UTC（北京时间 11:00）自动生成 5 道题
+[triggers]
+crons = ["0 3 * * *"]
 
 # 本地开发：wrangler dev 会启动 miniflare，D1 走 --local

@@ -25,7 +25,7 @@ const DEFAULT_SOURCE = 'D:\\mowen\\files\\前端文章合计\\database_export-ai
 const SOURCE_PATH = process.argv[2] ? resolve(process.cwd(), process.argv[2]) : DEFAULT_SOURCE;
 
 const OUT_DIR = join(PROJECT_ROOT, 'import');
-const SEED_PATH = join(OUT_DIR, 'seed.sql');
+const SEED_PATH = process.argv[3] ? resolve(process.cwd(), process.argv[3]) : join(OUT_DIR, 'seed.sql');
 const REPORT_PATH = join(OUT_DIR, 'report.txt');
 
 /** 严格按约定的 14 列、固定顺序 */

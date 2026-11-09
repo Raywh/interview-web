@@ -210,6 +210,12 @@ export interface AdminStats {
   ai: { neurons: number };
   /** 门禁判为 high 的 AI 回答数 */
   flagged?: number;
+  /** 访问统计（§14）：today / last7 按 UTC 日切分，topPaths 为近 7 天前 5 */
+  pv?: {
+    today: number;
+    last7: number;
+    topPaths: Array<{ path: string; count: number }>;
+  };
 }
 
 /** GET /api/admin/stats（需 admin） */
@@ -354,4 +360,17 @@ export function postAiComment(
     `/questions/${encodeURIComponent(questionId)}/ai-comments`,
     { method: 'POST', body: JSON.stringify({ question, answer }) },
   );
+}
+/** POST /api/admin/generate —— 手动让 AI 生成一道题（需 admin） */
+export function generateQuestion(category: string): Promise<{
+  id: string;
+  title: string;
+  category: string;
+  tier: Tier;
+  status: Status;
+}> {
+  return request('/admin/generate', {
+    method: 'POST',
+    body: JSON.stringify({ category }),
+  });
 }
