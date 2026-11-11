@@ -16,6 +16,7 @@ const MD_LI = 'md-li';
 const MD_LIST = 'md-list';
 const MD_CODE = 'md-code';
 const MD_H = 'md-h';
+const MD_IMG = 'md-img';
 
 /**
  * 把纯文本片段中的简单 Markdown 转为 HTML（加粗/斜体/行内代码/标题/列表/分段）。
@@ -32,6 +33,13 @@ export function mdToHtml(md: string): string {
 
   // 行内代码
   s = s.replace(/`([^`\n]+)`/g, '<code class="' + MD_CODE + '">$1</code>');
+  // 图片：只接受站内上传路径（/api/files/...），外链图片一律原样保留，避免被当成追踪像素
+  s = s.replace(
+    /!\[([^\]\n]*)\]\((\/api\/files\/[^)\s]+)\)/g,
+    (_m, alt: string, src: string) =>
+      '<img class="' + MD_IMG + '" src="' + src + '" alt="' +
+      String(alt).replace(/"/g, '&quot;') + '" loading="lazy" />',
+  );
   // 加粗
   s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
   // 斜体

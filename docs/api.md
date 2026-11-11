@@ -575,3 +575,39 @@ crons = ["0 3 * * *"]     # 每天 03:00 UTC = 北京时间 11:00
 `web/src/router.ts` 的 `router.afterEach` 调用 `reportPageview(to.fullPath)`：
 优先 `navigator.sendBeacon`（页面关闭/跳转也能发出），队列失败时退回 `fetch(..., { keepalive: true })`。
 任何失败都静默，不影响导航。管理端展示在「审核统计」下方（今日 PV / 7 日 PV / Top 5 路径）。
+---
+
+## 15. 图片上传（2026-11-11）
+
+存储用 **Workers KV**（不是 R2）。原因：R2 开通必须绑卡，即使免费额度内也会产生账单记录；
+KV 在 Workers 免费计划里是硬额度（1 GB 存储 / 1000 次写/天），超额直接拒绝，不产生费用。
+
+### `POST /api/upload`（需登录）
+
+请求体**直接是图片二进制**，用 `Content-Type` 标明类型（不用 multipart）：
+
+```bash
+curl -X POST /api/upload -H "Content-Type: image/png" --data-binary @photo.png
+```
+
+```jsonc
+{ "ok": true, "data": { "key": "u/<userId>/f_<ulid>.png", "url": "/api/files/u/...", "size": 70 } }
+```
+
+限制：
+
+| 项 | 值 |
+|---|---|
+| 类型 | `image/png` `image/jpeg` `image/webp` `image/gif` |
+| 单文件 | ≤ 2 MB |
+| 频率 | 每用户每天 20 次 |
+
+### `GET /api/files/<key>`（公开）
+
+按 `Content-Type` 返回原图，带 `cache-control: public, max-age=31536000, immutable`
+（key 含随机 ULID，内容不可变，可放心长缓存）。
+
+### 前端用法
+
+投稿页「插入图片」→ 上传 → 在光标处插入 `![](/api/files/...)`。
+Markdown 渲染只识别站内 `/api/files/` 前缀的图片，外链图片原样保留不渲染（避免追踪像素）。

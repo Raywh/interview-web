@@ -28,8 +28,10 @@ app.get('/api/health', async (c) => {
 // ── 挂载点（按顺序打开，每次只加一行）──────────────────
 import { meRoute } from './routes/me';
 import { aiRoute } from './routes/ai';
+import { filesRoute } from './routes/files';
 app.route('/api/me', meRoute);
 app.route('/api/ai', aiRoute);
+app.route('/api', filesRoute);
 
 // A3：认证路由（github / email / logout / me）
 import { authRoute } from './routes/auth';

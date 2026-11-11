@@ -374,3 +374,41 @@ export function generateQuestion(category: string): Promise<{
     body: JSON.stringify({ category }),
   });
 }
+// ───────────────────────── 图片上传（§15） ─────────────────────────
+
+export interface UploadResult {
+  key: string;
+  url: string;
+  size: number;
+}
+
+/** 上传图片（原始二进制 + Content-Type），返回站内路径 */
+export async function uploadImage(file: File): Promise<UploadResult> {
+  let res: Response;
+  try {
+    res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'content-type': file.type },
+      body: file,
+      credentials: 'include',
+    });
+  } catch {
+    throw new ApiError('NETWORK', '无法连接服务器，请检查网络后重试');
+  }
+
+  let payload: { ok?: boolean; data?: UploadResult; error?: { code?: string; message?: string } } | undefined;
+  try {
+    payload = (await res.json()) as typeof payload;
+  } catch {
+    payload = undefined;
+  }
+
+  if (!payload || payload.ok !== true || !payload.data) {
+    throw new ApiError(
+      (payload?.error?.code as never) ?? 'INTERNAL',
+      payload?.error?.message ?? `上传失败（HTTP ${res.status}）`,
+      res.status,
+    );
+  }
+  return payload.data;
+}

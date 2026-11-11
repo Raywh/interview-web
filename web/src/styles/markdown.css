@@ -34,3 +34,12 @@
   font-size: calc(var(--rpx) * 30);
   line-height: 1.6;
 }
+/* 正文里的图片（投稿上传） */
+.md-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: var(--space-3) 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}

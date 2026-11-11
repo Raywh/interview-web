@@ -11,7 +11,7 @@ import { useRouter } from 'vue-router';
 import UiButton from '../components/UiButton.vue';
 import UiCard from '../components/UiCard.vue';
 import { ApiError } from '../api/client';
-import { createQuestion } from '../api/endpoints';
+import { createQuestion, uploadImage } from '../api/endpoints';
 import type { CreateQuestionResult } from '../api/endpoints';
 import type { Tier } from '../api/types';
 import { addMyQuestionRecord } from '../stores/myRecords';
@@ -65,6 +65,43 @@ const errors = reactive({
 });
 
 const submitting = ref(false);
+const contentEl = ref<HTMLTextAreaElement | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
+const uploading = ref(false);
+const uploadError = ref('');
+
+const UPLOAD_MAX = 2 * 1024 * 1024;
+const UPLOAD_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+async function onFileChange(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+
+  if (!UPLOAD_TYPES.includes(file.type)) {
+    uploadError.value = '只支持 png / jpeg / webp / gif';
+    return;
+  }
+  if (file.size > UPLOAD_MAX) {
+    uploadError.value = '图片不能超过 2 MB';
+    return;
+  }
+
+  uploading.value = true;
+  uploadError.value = '';
+  try {
+    const { url } = await uploadImage(file);
+    const md = `\n![](${url})\n`;
+    const el = contentEl.value;
+    const at = el ? (el.selectionStart ?? form.content.length) : form.content.length;
+    form.content = form.content.slice(0, at) + md + form.content.slice(at);
+  } catch (err) {
+    uploadError.value = err instanceof Error ? err.message : '上传失败，请稍后再试';
+  } finally {
+    uploading.value = false;
+  }
+}
 const submitError = ref('');
 const result = ref<CreateQuestionResult | null>(null);
 const submittedTitle = ref('');
@@ -240,6 +277,7 @@ function goMe(): void {
           </label>
           <textarea
             id="add-content"
+            ref="contentEl"
             v-model="form.content"
             class="field__input field__input--area"
             rows="10"
@@ -247,6 +285,25 @@ function goMe(): void {
             placeholder="题目背景、考察点、代码片段…"
             :aria-invalid="Boolean(errors.content)"
           ></textarea>
+          <div class="field__tools">
+            <button
+              type="button"
+              class="img-pick"
+              :disabled="uploading"
+              @click="fileInput?.click()"
+            >
+              {{ uploading ? '上传中…' : '插入图片' }}
+            </button>
+            <span class="img-hint">png / jpg / webp / gif，≤ 2 MB，会插到光标处</span>
+            <input
+              ref="fileInput"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              class="img-input"
+              @change="onFileChange"
+            />
+          </div>
+          <p v-if="uploadError" class="field__error" role="alert">{{ uploadError }}</p>
           <p class="field__foot">
             <span v-if="errors.content" class="field__error" role="alert">{{ errors.content }}</span>
             <span class="field__count">{{ contentLength }} / {{ BODY_MAX }}</span>
@@ -516,5 +573,38 @@ function goMe(): void {
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-5);
+}
+
+/* ---- 插图 ---- */
+.field__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+
+.img-pick {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-1);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.img-pick:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.img-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-3);
+}
+
+.img-input {
+  display: none;
 }
 </style>

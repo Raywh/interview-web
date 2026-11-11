@@ -22,6 +22,11 @@ database_id = "65e4e5fa-fe25-4c1e-9a49-557c99aa6d87"
 [ai]
 binding = "AI"
 
+# 图片存储：KV（免费、无需绑卡；R2 需要绑卡所以没用）
+[[kv_namespaces]]
+binding = "FILES"
+id = "d8c8c035a2b5406290155787acb68c81"
+
 [vars]
 # 生产：Worker 自己的域名（OAuth 回调、登录跳转都基于它）
 # 本地覆盖放在 .dev.vars（已 gitignore），不要把本地地址写进这里

@@ -26,6 +26,6 @@ export function ulid(now: number = Date.now()): string {
 }
 
 /** 契约里的业务前缀：q_ / c_ / u_ */
-export function newId(prefix: 'q' | 'c' | 'u'): string {
+export function newId(prefix: 'q' | 'c' | 'u' | 'f'): string {
   return `${prefix}_${ulid()}`;
 }

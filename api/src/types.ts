@@ -112,6 +112,8 @@ export interface Env {
   ASSETS: Fetcher;
   /** Workers AI 绑定（wrangler.toml [ai] binding = "AI"） */
   AI: Ai;
+  /** 图片存储（KV；R2 需要绑卡，改用 KV） */
+  FILES: KVNamespace;
   JWT_SECRET: string;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
