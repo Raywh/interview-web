@@ -72,6 +72,28 @@ app.notFound((c) => {
 
 app.onError((err, c) => {
   console.error('[worker]', err);
+  // 未捕获异常落库：线上没有 tail 可看时，这是唯一能看到堆栈的地方
+  try {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? (err.stack ?? '') : '';
+    c.executionCtx.waitUntil(
+      c.env.DB.prepare(
+        'INSERT INTO logs (level, tag, message, meta, path, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?)',
+      )
+        .bind(
+          'error',
+          'worker.error',
+          message.slice(0, 2000),
+          JSON.stringify({ stack: stack.slice(0, 3000) }).slice(0, 4096),
+          c.req.path,
+          Date.now(),
+        )
+        .run()
+        .catch(() => undefined),
+    );
+  } catch {
+    // 记日志失败就放弃，不要再抛
+  }
   return c.json(
     { ok: false, error: { code: 'INTERNAL', message: '服务异常，请稍后再试' } },
     500,

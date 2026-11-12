@@ -77,6 +77,10 @@ const aiFillHint = ref('');
 
 async function fillWithAi(): Promise<void> {
   const title = form.title.trim();
+  if (!form.category) {
+    aiFillError.value = '请先选择分类，AI 会按分类调整回答深度';
+    return;
+  }
   if (title.length < 5) {
     aiFillError.value = '先写标题（至少 5 个字），AI 才能据此解答';
     return;
@@ -304,11 +308,41 @@ function goMe(): void {
           </p>
         </div>
 
+        <div class="field">
+          <label class="field__label" for="add-category">
+            分类<span class="field__required" aria-hidden="true">*</span>
+          </label>
+          <select
+            id="add-category"
+            v-model="form.category"
+            class="field__input field__input--select"
+            :aria-invalid="Boolean(errors.category)"
+          >
+            <option value="" disabled>请选择分类</option>
+            <option v-for="name in CATEGORIES" :key="name" :value="name">{{ name }}</option>
+          </select>
+          <p class="field__foot">
+            <span v-if="errors.category" class="field__error" role="alert">{{ errors.category }}</span>
+          </p>
+        </div>
         <div class="ai-fill">
-          <button type="button" class="ai-fill__btn" :disabled="aiFilling" @click="fillWithAi">
+          <button
+            type="button"
+            class="ai-fill__btn"
+            :disabled="aiFilling || !form.category || form.title.trim().length < 5"
+            @click="fillWithAi"
+          >
             {{ aiFilling ? 'AI 正在解答…' : 'AI 解答' }}
           </button>
-          <span class="ai-fill__hint">先填标题，点这里让 AI 补正文和解析（会覆盖原有内容）</span>
+          <span class="ai-fill__hint">
+            {{
+              !form.category
+                ? '先选上面的分类'
+                : form.title.trim().length < 5
+                  ? '再写个标题（至少 5 个字）'
+                  : '点按钮让 AI 补正文和解析（会覆盖原有内容）'
+            }}
+          </span>
         </div>
         <p v-if="aiFillError" class="field__error" role="alert">{{ aiFillError }}</p>
         <p v-if="aiFillHint" class="ai-fill__ok">{{ aiFillHint }}</p>
@@ -370,23 +404,6 @@ function goMe(): void {
           </p>
         </div>
 
-        <div class="field">
-          <label class="field__label" for="add-category">
-            分类<span class="field__required" aria-hidden="true">*</span>
-          </label>
-          <select
-            id="add-category"
-            v-model="form.category"
-            class="field__input field__input--select"
-            :aria-invalid="Boolean(errors.category)"
-          >
-            <option value="" disabled>请选择分类</option>
-            <option v-for="name in CATEGORIES" :key="name" :value="name">{{ name }}</option>
-          </select>
-          <p class="field__foot">
-            <span v-if="errors.category" class="field__error" role="alert">{{ errors.category }}</span>
-          </p>
-        </div>
 
         <p v-if="submitError" class="add-form__error" role="alert">{{ submitError }}</p>
 
