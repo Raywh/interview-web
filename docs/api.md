@@ -611,3 +611,25 @@ curl -X POST /api/upload -H "Content-Type: image/png" --data-binary @photo.png
 
 投稿页「插入图片」→ 上传 → 在光标处插入 `![](/api/files/...)`。
 Markdown 渲染只识别站内 `/api/files/` 前缀的图片，外链图片原样保留不渲染（避免追踪像素）。
+---
+
+## 16. AI 解答补全（2026-11-12）
+
+### `POST /api/ai/complete`（需登录）
+
+投稿页用：用户只写标题，点「AI 解答」→ 模型补正文与解析，前端填进对应输入框。
+
+```jsonc
+// 请求
+{ "title": "Vue 3 的响应式为什么用 Proxy", "category": "Vue" }
+// 响应
+{ "ok": true, "data": { "content": "…", "analysis": "…", "used": 3, "limit": 20 } }
+```
+
+| 项 | 规则 |
+|---|---|
+| 标题长度 | 5–200 字 |
+| 额度 | **与 `/api/ai/ask` 共用**每人每天 20 次 |
+| 失败 | 模型异常 / JSON 解析失败 → 500 `INTERNAL`，可重试 |
+
+前端行为：正文或解析已有内容时先 `confirm` 再覆盖；成功后提示剩余次数。

@@ -5,6 +5,7 @@
  * 免费额度 1 万 neurons/天，5 条 ≈ 1.8k，留足余量给用户追问。
  */
 import { newId } from '../lib/id';
+import { extractJsonObject } from '../lib/json';
 import { evaluate } from '../moderation/gate';
 import type { Env } from '../types';
 
@@ -25,56 +26,6 @@ export interface GeneratedQuestion {
  * 取从 start 处的 `{` 开始、括号配对的子串（跳过字符串内的括号）。
  * R1 的思考过程里常出现 `{`，所以不能简单用 lastIndexOf('}')。
  */
-function balancedObject(text: string, start: number): string | null {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = start; i < text.length; i += 1) {
-    const ch = text[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === '\\') escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') {
-      inString = true;
-      continue;
-    }
-    if (ch === '{') depth += 1;
-    else if (ch === '}') {
-      depth -= 1;
-      if (depth === 0) return text.slice(start, i + 1);
-    }
-  }
-  return null;
-}
-
-/**
- * 从模型输出里抠出 JSON。
- * 依次尝试：```json 围栏 → 整段 → 每个 `{` 起点做括号配对解析。
- * R1 会先输出思考过程（里面也有花括号），所以不能只用首尾 `{` `}` 截取。
- */
-function extractJson(text: string): Record<string, unknown> | null {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1];
-  const candidates = [fenced, text].filter((x): x is string => typeof x === 'string' && x.length > 0);
-
-  for (const candidate of candidates) {
-    for (let i = candidate.indexOf('{'); i !== -1; i = candidate.indexOf('{', i + 1)) {
-      const snippet = balancedObject(candidate, i);
-      if (!snippet) continue;
-      try {
-        const parsed = JSON.parse(snippet) as Record<string, unknown>;
-        if (parsed && typeof parsed.title === 'string') return parsed;
-      } catch {
-        // 继续试下一个 {
-      }
-    }
-  }
-  return null;
-}
-
 function clip(value: unknown, max: number): string {
   return typeof value === 'string' ? Array.from(value).slice(0, max).join('').trim() : '';
 }
@@ -119,7 +70,7 @@ export async function generateQuestion(
     return null;
   }
 
-  const parsed = extractJson(raw);
+  const parsed = extractJsonObject(raw, 'title');
   if (!parsed) {
     console.error('[generate] 解析失败', raw.slice(0, 200));
     // 没有 tail 可看，失败必须落库，否则只能等明天再猜

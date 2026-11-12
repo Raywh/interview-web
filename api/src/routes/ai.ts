@@ -13,8 +13,9 @@ import { Hono } from 'hono';
 import { requireAuth } from '../auth/middleware';
 import type { AppEnv } from '../lib/env';
 import { currentUser } from '../lib/env';
-import { fail } from '../lib/response';
-import { aiAskSchema, zodFail } from '../lib/validate';
+import { fail, ok } from '../lib/response';
+import { extractJsonObject } from '../lib/json';
+import { aiAskSchema, aiCompleteSchema, zodFail } from '../lib/validate';
 
 export const aiRoute = new Hono<AppEnv>();
 
@@ -168,5 +169,81 @@ aiRoute.post('/ask', requireAuth, async (c) => {
       'cache-control': 'no-store',
       'x-accel-buffering': 'no',
     },
+  });
+});
+
+/**
+ * AI 解答 —— POST /api/ai/complete（需登录）
+ *
+ * 投稿页用：用户只写标题 → 让模型补「正文」和「解析」，前端填进对应输入框。
+ * 与 /ask 共用同一份每日额度（每人 20 次）。
+ */
+aiRoute.post('/complete', requireAuth, async (c) => {
+  const user = currentUser(c);
+  if (!user) return fail('UNAUTHORIZED', '请先登录');
+
+  const body: unknown = await c.req.json().catch(() => undefined);
+  const parsed = aiCompleteSchema.safeParse(body);
+  if (!parsed.success) return zodFail(parsed.error);
+  const { title, category } = parsed.data;
+
+  const day = todayUtc();
+  const usage = await c.env.DB.prepare('SELECT calls FROM ai_usage WHERE day = ? AND user_id = ?')
+    .bind(day, user.id)
+    .first<{ calls: number }>();
+  const used = usage?.calls ?? 0;
+  if (used >= DAILY_LIMIT) {
+    return fail('RATE_LIMITED', `今天的 AI 使用次数已用完（每人每天 ${DAILY_LIMIT} 次）`, [
+      `${DAILY_LIMIT}/day`,
+    ]);
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO ai_usage (day, user_id, calls) VALUES (?, ?, 1)
+     ON CONFLICT(day, user_id) DO UPDATE SET calls = calls + 1`,
+  )
+    .bind(day, user.id)
+    .run();
+
+  const prompt = [
+    '你是一位资深前端面试官。用户给出一道题的标题，请补全它。',
+    category ? `分类：${category}` : '',
+    `标题：${title}`,
+    '',
+    '要求：',
+    '1. content：题目描述/考察场景，100-300 字，交代清楚问什么、有什么约束。',
+    '2. analysis：详细解析，400-1000 字，先结论再分点，必要时给简短代码示例（Markdown）。',
+    '3. 只输出 JSON，不要解释文字，不要 Markdown 代码块包裹。格式：',
+    '{"content":"...","analysis":"..."}',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  let raw = '';
+  try {
+    const result = (await c.env.AI.run(MODEL as never, {
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2400,
+    } as never)) as { response?: string };
+    raw = result?.response ?? '';
+  } catch (err) {
+    console.error('[ai.complete] run failed', err);
+    return fail('INTERNAL', 'AI 服务暂时不可用，请稍后再试');
+  }
+
+  const data = extractJsonObject(raw, 'analysis');
+  const content = typeof data?.content === 'string' ? data.content.trim() : '';
+  const analysis = typeof data?.analysis === 'string' ? data.analysis.trim() : '';
+
+  if (!content || !analysis) {
+    console.error('[ai.complete] parse failed', raw.slice(0, 200));
+    return fail('INTERNAL', 'AI 返回的内容没能解析，请重试一次');
+  }
+
+  return ok({
+    content: content.slice(0, 20000),
+    analysis: analysis.slice(0, 20000),
+    used: used + 1,
+    limit: DAILY_LIMIT,
   });
 });

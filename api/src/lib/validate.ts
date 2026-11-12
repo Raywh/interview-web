@@ -150,3 +150,8 @@ export const aiCommentInputSchema = z.object({
   question: z.string().trim().min(1, '缺少提问').max(500, '提问最多 500 字'),
   answer: z.string().trim().min(1, '缺少回答').max(4000, '回答最多 4000 字'),
 });
+/** AI 解答：给标题，让模型补正文与解析（投稿页用） */
+export const aiCompleteSchema = z.object({
+  title: z.string().trim().min(5, '标题至少 5 个字').max(200, '标题最多 200 字'),
+  category: z.string().trim().max(40).optional(),
+});

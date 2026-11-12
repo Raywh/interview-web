@@ -11,7 +11,7 @@ import { useRouter } from 'vue-router';
 import UiButton from '../components/UiButton.vue';
 import UiCard from '../components/UiCard.vue';
 import { ApiError } from '../api/client';
-import { createQuestion, uploadImage } from '../api/endpoints';
+import { completeWithAi, createQuestion, uploadImage } from '../api/endpoints';
 import type { CreateQuestionResult } from '../api/endpoints';
 import type { Tier } from '../api/types';
 import { addMyQuestionRecord } from '../stores/myRecords';
@@ -69,6 +69,39 @@ const contentEl = ref<HTMLTextAreaElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
 const uploadError = ref('');
+
+/** AI 解答：只写标题，让模型补正文与解析 */
+const aiFilling = ref(false);
+const aiFillError = ref('');
+const aiFillHint = ref('');
+
+async function fillWithAi(): Promise<void> {
+  const title = form.title.trim();
+  if (title.length < 5) {
+    aiFillError.value = '先写标题（至少 5 个字），AI 才能据此解答';
+    return;
+  }
+  if (
+    (form.content.trim() || form.analysis.trim()) &&
+    !window.confirm('正文或解析里已有内容，AI 会覆盖它们，确定继续吗？')
+  ) {
+    return;
+  }
+
+  aiFilling.value = true;
+  aiFillError.value = '';
+  aiFillHint.value = '';
+  try {
+    const result = await completeWithAi({ title, category: form.category });
+    form.content = result.content;
+    form.analysis = result.analysis;
+    aiFillHint.value = `已填入正文与解析，今日剩余 ${Math.max(0, result.limit - result.used)} 次`;
+  } catch (err) {
+    aiFillError.value = err instanceof Error ? err.message : 'AI 暂时不可用，请稍后再试';
+  } finally {
+    aiFilling.value = false;
+  }
+}
 
 const UPLOAD_MAX = 2 * 1024 * 1024;
 const UPLOAD_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -271,6 +304,14 @@ function goMe(): void {
           </p>
         </div>
 
+        <div class="ai-fill">
+          <button type="button" class="ai-fill__btn" :disabled="aiFilling" @click="fillWithAi">
+            {{ aiFilling ? 'AI 正在解答…' : 'AI 解答' }}
+          </button>
+          <span class="ai-fill__hint">先填标题，点这里让 AI 补正文和解析（会覆盖原有内容）</span>
+        </div>
+        <p v-if="aiFillError" class="field__error" role="alert">{{ aiFillError }}</p>
+        <p v-if="aiFillHint" class="ai-fill__ok">{{ aiFillHint }}</p>
         <div class="field">
           <label class="field__label" for="add-content">
             正文<span class="field__required" aria-hidden="true">*</span>
@@ -606,5 +647,45 @@ function goMe(): void {
 
 .img-input {
   display: none;
+}
+
+/* ---- AI 解答 ---- */
+.ai-fill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: var(--space-4) 0 var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+}
+
+.ai-fill__btn {
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-fill__btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.ai-fill__hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-2);
+}
+
+.ai-fill__ok {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-success);
 }
 </style>

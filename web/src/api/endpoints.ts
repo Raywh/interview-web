@@ -412,3 +412,19 @@ export async function uploadImage(file: File): Promise<UploadResult> {
   }
   return payload.data;
 }
+// ───────────────────────── AI 解答（§11.1） ─────────────────────────
+
+export interface AiCompleteResult {
+  content: string;
+  analysis: string;
+  used: number;
+  limit: number;
+}
+
+/** 给标题，让 AI 补正文与解析（投稿页用；与 AI 追问共用每日额度） */
+export function completeWithAi(input: { title: string; category?: string }): Promise<AiCompleteResult> {
+  return request<AiCompleteResult>('/ai/complete', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
