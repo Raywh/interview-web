@@ -52,7 +52,9 @@ function recordingDb(row: Record<string, unknown>, calls: SqlCall[]) {
           calls.push({ sql, args });
           return statement;
         },
-        first: async () => row,
+        // 标题查重（POST /api/questions）会 SELECT 同标题的行；
+      // 假 D1 默认没有重复，所以这条查询返回 null，其余查询仍返回 row
+      first: async () => (sql.includes('WHERE title = ?') ? null : row),
         all: async () => ({ results: [] as unknown[] }),
         run: async () => ({ success: true }),
       };
