@@ -130,6 +130,17 @@ questionsRoute.post('/', requireAuth, async (c) => {
   // TODO(A2 二期 / A3)：限流 question:u:<userId> 1h/10 次（docs/api.md §6），rate_limits 表实现
 
   const { title, content, analysis, category } = parsed.data;
+  // 标题查重：同名的已发布 / 待审题都不允许再投（实测出现过重复投稿）
+  const duplicate = await c.env.DB.prepare(
+    'SELECT status FROM questions WHERE title = ? LIMIT 1',
+  )
+    .bind(title)
+    .first<{ status: string }>();
+  if (duplicate) {
+    const label = duplicate.status === 'published' ? '已发布' : '待审核';
+    return fail('CONFLICT', `题库里已有同名题目（${label}），请换个标题或补充差异说明`);
+  }
+  
   const now = Date.now();
   const id = newId('q');
 
