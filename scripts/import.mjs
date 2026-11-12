@@ -25,7 +25,8 @@ const DEFAULT_SOURCE = 'D:\\mowen\\files\\前端文章合计\\database_export-ai
 const SOURCE_PATH = process.argv[2] ? resolve(process.cwd(), process.argv[2]) : DEFAULT_SOURCE;
 
 const OUT_DIR = join(PROJECT_ROOT, 'import');
-const SEED_PATH = process.argv[3] ? resolve(process.cwd(), process.argv[3]) : join(OUT_DIR, 'seed.sql');
+const ALLOW_EMPTY_ANALYSIS = process.argv.includes('--allow-empty-analysis');
+const SEED_PATH = process.argv[3] && !process.argv[3].startsWith('--') ? resolve(process.cwd(), process.argv[3]) : join(OUT_DIR, 'seed.sql');
 const REPORT_PATH = join(OUT_DIR, 'report.txt');
 
 /** 严格按约定的 14 列、固定顺序 */
@@ -169,7 +170,13 @@ function buildRows(records) {
     const analysis = obj.analysis;
 
     if (isBlank(title)) { drop.emptyTitle += 1; continue; }
-    if (isBlank(analysis)) { drop.emptyAnalysis += 1; continue; }
+    // --allow-empty-analysis：只导题目、答案留空的场景（外部题库批量导入）
+  if (isBlank(analysis)) {
+    if (!ALLOW_EMPTY_ANALYSIS) {
+      drop.emptyAnalysis += 1;
+      continue;
+    }
+  }
 
     const createdAt = toEpochMs(obj.createTime);
     if (createdAt === null) { drop.badDate += 1; continue; }
