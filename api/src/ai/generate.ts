@@ -63,8 +63,10 @@ export async function generateQuestion(
     const result = (await env.AI.run(MODEL as never, {
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 3200,
-    } as never)) as { response?: string };
-    raw = result?.response ?? '';
+    } as never)) as { response?: unknown };
+    // response 可能是 string，也可能是对象/数组（不同模型/版本不一样）
+    const value = result?.response;
+    raw = typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
   } catch (err) {
     console.error('[generate] ai.run failed', err);
     return null;

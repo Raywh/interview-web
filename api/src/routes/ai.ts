@@ -224,8 +224,10 @@ aiRoute.post('/complete', requireAuth, async (c) => {
     const result = (await c.env.AI.run(MODEL as never, {
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 2400,
-    } as never)) as { response?: string };
-    raw = result?.response ?? '';
+    } as never)) as { response?: unknown };
+    // response 可能是 string，也可能是对象/数组（不同模型/版本不一样）
+    const value = result?.response;
+    raw = typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
   } catch (err) {
     console.error('[ai.complete] run failed', err);
     return fail('INTERNAL', 'AI 服务暂时不可用，请稍后再试');

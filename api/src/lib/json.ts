@@ -38,9 +38,12 @@ function balancedObject(text: string, start: number): string | null {
  * @param requiredKey 解析结果里必须存在的字段名（用来排除「思考过程里的小对象」）
  */
 export function extractJsonObject(
-  text: string,
+  text: unknown,
   requiredKey: string,
 ): Record<string, unknown> | null {
+  // 模型返回的 response 不保证是字符串（可能是对象/数组），先收严
+  if (typeof text !== 'string' || text.length === 0) return null;
+
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1];
   const candidates = [fenced, text].filter(
     (value): value is string => typeof value === 'string' && value.length > 0,
