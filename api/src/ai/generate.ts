@@ -12,7 +12,7 @@ import type { Env } from '../types';
 const MODEL = '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b';
 
 /** 每日轮换生成的分类（与小程序一致） */
-export const DAILY_CATEGORIES = ['Vue', 'React', '工程化', 'CSS', 'JS'] as const;
+export const DAILY_CATEGORIES = ['Vue', 'React', 'HTML', 'CSS', 'JS', 'Node.js', '工程化'] as const;
 
 export interface GeneratedQuestion {
   id: string;

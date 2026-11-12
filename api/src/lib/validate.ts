@@ -20,9 +20,11 @@ import { fail } from './response';
 export const CATEGORIES = [
   'Vue',
   'React',
-  '工程化',
+  'HTML',
   'CSS',
   'JS',
+  'Node.js',
+  '工程化',
   'TypeScript与类型系统',
   '流式处理与实时通信',
   '前端状态管理与数据流',

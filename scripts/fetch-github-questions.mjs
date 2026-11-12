@@ -69,9 +69,8 @@ const CATEGORY_MAP = {
   js: 'JS',
   javascript: 'JS',
   ECMAScript: 'JS',
-  // html / nodejs 暂不在白名单，先丢弃
-  html: null,
-  nodejs: null,
+  html: 'HTML',
+  nodejs: 'Node.js',
 };
 
 const SOURCE = SOURCES[REPO];

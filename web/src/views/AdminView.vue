@@ -46,7 +46,7 @@ const feedback = ref('');
 
 const submittingId = ref('');
 /** AI 出题：分类选择 + 运行状态 */
-const GEN_CATEGORIES = ['Vue', 'React', '工程化', 'CSS', 'JS'] as const;
+const GEN_CATEGORIES = ['Vue', 'React', 'HTML', 'CSS', 'JS', 'Node.js', '工程化'] as const;
 const genCategory = ref<string>('Vue');
 const generating = ref(false);
 

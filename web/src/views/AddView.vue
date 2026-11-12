@@ -20,6 +20,8 @@ import { addMyQuestionRecord } from '../stores/myRecords';
 const CATEGORIES: readonly string[] = [
   'Vue',
   'React',
+  'HTML',
+  'Node.js',
   '工程化',
   'CSS',
   'JS',
