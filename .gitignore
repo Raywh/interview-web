@@ -9,3 +9,4 @@ import/seed.sql
 import/report.txt
 backups/
 import/extra-seed.sql
+import/gh-seed.sql
