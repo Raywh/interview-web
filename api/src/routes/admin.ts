@@ -17,6 +17,7 @@ import { fail, ok } from '../lib/response';
 import {
   adminQueueQuerySchema,
   MAX_REVIEW_ROUNDS,
+  paginationSchema,
   reviewInputSchema,
   visibilityInputSchema,
   zodFail,
@@ -385,4 +386,129 @@ adminRoute.post('/generate', requireAdmin, async (c) => {
     return fail('INTERNAL', '本次没生成出来（模型超时、解析失败或标题重复），请稍后再试');
   }
   return ok(created);
+});
+// ───────────────────── 题库管理（批量筛选 / 删除）─────────────────────
+
+/**
+ * GET /api/admin/questions
+ *
+ * 管理端题库列表：与公开列表不同，**包含所有状态**，可按分类/状态/有无解析/关键词过滤。
+ * 查询参数：category、status、q、hasAnalysis（yes|no）、page、pageSize
+ */
+adminRoute.get('/questions', requireAdmin, async (c) => {
+  const denied = guardAdmin(c);
+  if (denied) return denied;
+
+  const parsed = paginationSchema.safeParse(c.req.query());
+  if (!parsed.success) return zodFail(parsed.error);
+  const { page, pageSize } = parsed.data;
+  const offset = (page - 1) * pageSize;
+
+  const category = (c.req.query('category') ?? '').trim();
+  const status = (c.req.query('status') ?? '').trim();
+  const q = (c.req.query('q') ?? '').trim();
+  const hasAnalysis = (c.req.query('hasAnalysis') ?? '').trim();
+
+  const where: string[] = ['1 = 1'];
+  const bind: unknown[] = [];
+
+  if (category) {
+    where.push('category = ?');
+    bind.push(category);
+  }
+  if (['published', 'pending', 'rejected', 'hidden'].includes(status)) {
+    where.push('status = ?');
+    bind.push(status);
+  }
+  if (q) {
+    const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+    where.push("title LIKE ? ESCAPE '\\'");
+    bind.push(`%${escaped}%`);
+  }
+  if (hasAnalysis === 'yes') where.push("analysis <> ''");
+  if (hasAnalysis === 'no') where.push("analysis = ''");
+
+  const whereSql = where.join(' AND ');
+  const db = c.env.DB;
+
+  const totalRow = await db
+    .prepare(`SELECT COUNT(*) AS c FROM questions WHERE ${whereSql}`)
+    .bind(...bind)
+    .first<{ c: number }>();
+  const total = Number(totalRow?.c ?? 0);
+
+  const list = await db
+    .prepare(
+      `SELECT id, title, category, status, risk_tier, is_ai, author_id, created_at,
+              CASE WHEN analysis = '' THEN 0 ELSE 1 END AS has_analysis
+         FROM questions
+        WHERE ${whereSql}
+        ORDER BY created_at DESC, rowid ASC
+        LIMIT ? OFFSET ?`,
+    )
+    .bind(...bind, pageSize, offset)
+    .all<{
+      id: string;
+      title: string;
+      category: string;
+      status: string;
+      risk_tier: string;
+      is_ai: number;
+      author_id: string | null;
+      created_at: number;
+      has_analysis: number;
+    }>();
+
+  const items = (list.results ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    status: row.status,
+    riskTier: row.risk_tier,
+    isAi: row.is_ai === 1,
+    authorId: row.author_id,
+    createdAt: row.created_at,
+    hasAnalysis: row.has_analysis === 1,
+  }));
+
+  return ok({ items, total, page, pageSize, hasMore: offset + items.length < total });
+});
+
+/**
+ * POST /api/admin/questions/delete —— 硬删除（不可恢复）
+ *
+ * body: { ids: string[] }，单次最多 100 条。
+ * 先删评论再删题目（schema 虽然声明了 CASCADE，但 D1 不保证每个连接都开外键）。
+ */
+adminRoute.post('/questions/delete', requireAdmin, async (c) => {
+  const denied = guardAdmin(c);
+  if (denied) return denied;
+
+  const body: unknown = await c.req.json().catch(() => undefined);
+  const ids =
+    body && typeof body === 'object' && Array.isArray((body as { ids?: unknown }).ids)
+      ? ((body as { ids: unknown[] }).ids
+          .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+          .map((value) => value.trim())
+          .slice(0, 100))
+      : [];
+
+  if (ids.length === 0) {
+    return fail('VALIDATION', '请传入要删除的题目 id（最多 100 条）', ['ids']);
+  }
+
+  const placeholders = ids.map(() => '?').join(',');
+  const db = c.env.DB;
+
+  await db
+    .prepare(`DELETE FROM comments WHERE question_id IN (${placeholders})`)
+    .bind(...ids)
+    .run();
+
+  const deleted = await db
+    .prepare(`DELETE FROM questions WHERE id IN (${placeholders})`)
+    .bind(...ids)
+    .run();
+
+  return ok({ requested: ids.length, deleted: deleted.meta?.changes ?? 0 });
 });

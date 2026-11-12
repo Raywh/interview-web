@@ -633,3 +633,39 @@ Markdown 渲染只识别站内 `/api/files/` 前缀的图片，外链图片原�
 | 失败 | 模型异常 / JSON 解析失败 → 500 `INTERNAL`，可重试 |
 
 前端行为：正文或解析已有内容时先 `confirm` 再覆盖；成功后提示剩余次数。
+---
+
+## 17. 题库管理（2026-11-12）
+
+### `GET /api/admin/questions`（需 admin）
+
+管理端题库列表，**包含所有状态**（公开列表只看 published）。
+
+| 参数 | 说明 |
+|---|---|
+| `category` | 精确匹配分类 |
+| `status` | `published` / `pending` / `rejected` / `hidden` |
+| `q` | 标题关键词（LIKE，通配符已转义） |
+| `hasAnalysis` | `yes` / `no`（按解析是否为空筛） |
+| `page` / `pageSize` | 同 §0 |
+
+```jsonc
+{ "ok": true, "data": { "items": [{
+  "id": "q_...", "title": "…", "category": "CSS", "status": "published",
+  "riskTier": "low", "isAi": false, "authorId": null,
+  "createdAt": 1762..., "hasAnalysis": false
+}], "total": 355, "page": 1, "pageSize": 20, "hasMore": true } }
+```
+
+### `POST /api/admin/questions/delete`（需 admin）
+
+硬删除，**不可恢复**；先删该题下的评论再删题目。单次最多 100 条。
+
+```jsonc
+// 请求
+{ "ids": ["q_...", "q_..."] }
+// 响应
+{ "ok": true, "data": { "requested": 2, "deleted": 2 } }
+```
+
+前端入口：审核台 → 「题库管理 →」，支持分类/状态/解析/关键词筛选 + 勾选批量删除（二次确认）。

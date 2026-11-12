@@ -278,6 +278,9 @@ onMounted(() => {
           按风险等级排序，高风险排在最前。每条都会列出投稿时门禁命中的原因，
           这是判断的主要依据。
         </p>
+        <p class="admin-links">
+          <RouterLink class="admin-link" :to="{ name: 'admin-questions' }">题库管理 →</RouterLink>
+        </p>
       </section>
 
       <div class="admin-stats" aria-label="审核统计">
@@ -978,5 +981,16 @@ onMounted(() => {
 .ai-gen__hint {
   font-size: var(--text-xs);
   color: var(--color-text-3);
+}
+
+.admin-links {
+  margin: var(--space-2) 0 0;
+}
+
+.admin-link {
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
 }
 </style>

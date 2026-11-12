@@ -428,3 +428,46 @@ export function completeWithAi(input: { title: string; category?: string }): Pro
     body: JSON.stringify(input),
   });
 }
+// ───────────────────── 题库管理（§17）─────────────────────
+
+export interface AdminQuestionItem {
+  id: string;
+  title: string;
+  category: string;
+  status: Status;
+  riskTier: Tier;
+  isAi: boolean;
+  authorId: string | null;
+  createdAt: number;
+  hasAnalysis: boolean;
+}
+
+export interface AdminQuestionQuery {
+  category?: string;
+  status?: string;
+  q?: string;
+  hasAnalysis?: 'yes' | 'no';
+  page?: number;
+  pageSize?: number;
+}
+
+/** GET /api/admin/questions（需 admin，含所有状态） */
+export function getAdminQuestions(params: AdminQuestionQuery = {}): Promise<Page<AdminQuestionItem>> {
+  const qs = new URLSearchParams();
+  if (params.category) qs.set('category', params.category);
+  if (params.status) qs.set('status', params.status);
+  if (params.q) qs.set('q', params.q);
+  if (params.hasAnalysis) qs.set('hasAnalysis', params.hasAnalysis);
+  if (params.page) qs.set('page', String(params.page));
+  if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+  const query = qs.toString();
+  return request<Page<AdminQuestionItem>>(`/admin/questions${query ? `?${query}` : ''}`);
+}
+
+/** POST /api/admin/questions/delete（硬删除，不可恢复） */
+export function deleteAdminQuestions(ids: string[]): Promise<{ requested: number; deleted: number }> {
+  return request<{ requested: number; deleted: number }>('/admin/questions/delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}

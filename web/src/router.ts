@@ -4,6 +4,7 @@ import DetailView from './views/DetailView.vue';
 import LoginView from './views/LoginView.vue';
 import AddView from './views/AddView.vue';
 import AdminView from './views/AdminView.vue';
+import AdminQuestionsView from './views/AdminQuestionsView.vue';
 import MeView from './views/MeView.vue';
 import { useAuthStore } from './stores/auth';
 
@@ -50,6 +51,12 @@ export const router = createRouter({
       name: 'admin',
       component: AdminView,
       meta: { title: '审核台', requiresAuth: true },
+    },
+    {
+      path: '/admin/questions',
+      name: 'admin-questions',
+      component: AdminQuestionsView,
+      meta: { title: '题库管理', requiresAuth: true },
     },
     {
       path: '/me',
