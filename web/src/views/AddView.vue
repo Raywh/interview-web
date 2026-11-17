@@ -18,6 +18,8 @@ import { addMyQuestionRecord } from '../stores/myRecords';
 
 /** 分类白名单：docs/api.md §8.1（13 项，含 Vue / React），必须与 api/src/lib/validate.ts 一致 */
 const CATEGORIES: readonly string[] = [
+  '字节高频',
+  '手写题',
   'Vue',
   'React',
   'HTML',

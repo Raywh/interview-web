@@ -18,6 +18,8 @@ import { fail } from './response';
  * 见 docs/api.md §8.1。
  */
 export const CATEGORIES = [
+  '字节高频',
+  '手写题',
   'Vue',
   'React',
   'HTML',
